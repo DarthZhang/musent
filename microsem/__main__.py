@@ -60,7 +60,8 @@ def train(**kwargs):
     lr = kwargs["lr"]
     weight_decay = kwargs["weight_decay"]
     seed = kwargs["seed"]
-    dataset = kwargs["dataset"]
+    dataset_name = kwargs["dataset"]
+    kwargs["dataset"] = data.DatasetEnum.lookup(dataset_name)
 
     if not kwargs["no_cuda"]:
         torch.cuda.set_device(kwargs["gpu_number"])
@@ -82,16 +83,16 @@ def train(**kwargs):
 
     micro_sem.train()
     criterion = nn.CrossEntropyLoss()
-    output_layer = getattr(micro_sem, "output_{}".format(dataset))
+    output_layer = getattr(micro_sem, "output_{}".format(dataset_name))
     if kwargs["train_classifier_only"]:
         parameters = output_layer.parameters()
     else:
         parameters = list(filter(lambda p: p.requires_grad, micro_sem.parameters()))
     # optimizer = torch.optim.SGD(parameters, lr=lr, weight_decay=weight_decay, momentum=0.9)
-    # optimizer = torch.optim.Adam(parameters, lr=5E-4, weight_decay=1E-4)
-    optimizer = torch.optim.SGD(parameters, lr=0.005, momentum=0.9, weight_decay=1E-3)
+    # optimizer = torch.optim.Adam(parameters, lr=5E-3, weight_decay=1E-4)
+    optimizer = torch.optim.SGD(parameters, lr=0.005, momentum=0.9, weight_decay=1E-4)
     scheduler = ReduceLROnPlateau(optimizer, patience=kwargs["dev_per_epoch"] * 41, mode="max")
-    train_set, dev_set, test_set = data.SSTDataset.load_sst_sets("data", dataset=dataset)
+    train_set, dev_set, test_set = data.SSTDataset.load_sst_sets("data", dataset=dataset_name)
 
     collate_fn = micro_sem.convert_dataset
     # sampler = data.BinningSampler(train_set.sentences, mbatch_size=mbatch_size)
@@ -163,9 +164,9 @@ def do_random_search(given_params):
             max_params = args
     print("Best params: {}".format(max_params))
 
-def main():
+def do_train(**kwargs):
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset", default="fine", type=str, choices=["fine", "binary"])
+    parser.add_argument("--dataset", default="binary", type=str, choices=["fine", "binary"])
     parser.add_argument("--dev_per_epoch", default=16, type=int)
     parser.add_argument("--fc_size", default=200, type=int)
     parser.add_argument("--gpu_number", default=0, type=int)
@@ -179,17 +180,25 @@ def main():
     parser.add_argument("--no_cuda", action="store_true", default=False)
     parser.add_argument("--output_file", default="saves/model.pt", type=str)
     parser.add_argument("--quiet", action="store_true", default=False)
-    parser.add_argument("--random_search", action="store_true", default=False)
     parser.add_argument("--restore", action="store_true", default=False)
     parser.add_argument("--rnn_type", choices=["lstm", "gru"], default="lstm", type=str)
     parser.add_argument("--seed", default=3, type=int)
     parser.add_argument("--train_classifier_only", action="store_true", default=False)
     parser.add_argument("--weight_decay", default=1E-3, type=float)
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
+    args = vars(args)
+    args.update(kwargs)
+    train(**args)
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("mode", default="train", type=str, choices=["train", "test", "dump"])
+    parser.add_argument("--random_search", action="store_true", default=False)
+    args, _ = parser.parse_known_args()
     if args.random_search:
         do_random_search(vars(args))
         return
-    train(**vars(args))
+    do_train(**vars(args))
 
 if __name__ == "__main__":
     main()

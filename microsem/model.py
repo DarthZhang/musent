@@ -17,18 +17,10 @@ class SerializableModule(nn.Module):
     def load(self, filename):
         self.load_state_dict(torch.load(filename, map_location=lambda storage, loc: storage))
 
-class MicroSem(SerializableModule):
+class WordModule(SerializableModule):
     def __init__(self, word_model, **kwargs):
         super().__init__()
-        self.dataset = kwargs["dataset"]
         self.word_model = word_model
-        self.down_project = nn.Linear(word_model.dim, 16)
-        self.hidden1 = nn.Linear(16, 16)
-        self.bn1 = nn.BatchNorm1d(16, affine=False)
-        self.output_binary = nn.Linear(16, 2)
-        self.output_fine = nn.Linear(16, 5)
-        self.dropout = nn.Dropout(0.5)
-        self.alpha = nn.Parameter(torch.Tensor([1]))
 
     def convert_dataset(self, dataset):
         dataset = np.stack(dataset)
@@ -44,15 +36,44 @@ class MicroSem(SerializableModule):
     def preprocess(self, sentences):
         return torch.from_numpy(np.array(self.word_model.lookup(sentences)))
 
+class NanoSem(WordModule):
+    def __init__(self, word_model, **kwargs):
+        super().__init__(word_model, **kwargs)
+        self.dataset = kwargs["dataset"]
+        self.down_project = nn.Linear(word_model.dim, 16)
+        self.output_binary = nn.Linear(16, 2)
+        self.output_fine = nn.Linear(16, 5)
+        self.dropout = nn.Dropout(0.5)
+
     def forward(self, x):
         x = self.word_model(x).squeeze(1)
         words = [self.down_project(self.dropout(x.view(x.size(0), -1))) for x in x.split(1, 1)]
         words = torch.stack(words, 1)
         x = torch.max(words, 1)[0]
-        # x = F.tanh(self.bn1(self.hidden1(x)) / self.alpha)
-        if self.dataset == "binary":
+        if self.dataset == data.DatasetEnum.SST_BINARY:
             return self.output_binary(x)
-        else:
+        elif self.dataset == data.DatasetEnum.SST_FINE:
+            return self.output_fine(x)
+
+class MicroSem(WordModule):
+    def __init__(self, word_model, **kwargs):
+        super().__init__(word_model, **kwargs)
+        self.dataset = kwargs["dataset"]
+        self.down_project = nn.Linear(word_model.dim, 16)
+        self.gru = nn.GRU(16, 16, 1, batch_first=True)
+        self.output_binary = nn.Linear(16, 2)
+        self.output_fine = nn.Linear(16, 5)
+        self.dropout = nn.Dropout(0.5)
+
+    def forward(self, x):
+        x = self.word_model(x).squeeze(1)
+        words = [self.down_project(self.dropout(x.view(x.size(0), -1))) for x in x.split(1, 1)]
+        words = torch.stack(words, 1)
+        _, x = self.gru(words)
+        x = x.permute(1, 0, 2).contiguous().squeeze(1)
+        if self.dataset == data.DatasetEnum.SST_BINARY:
+            return self.output_binary(x)
+        elif self.dataset == data.DatasetEnum.SST_FINE:
             return self.output_fine(x)
 
 class WordEmbeddingModel(SerializableModule):

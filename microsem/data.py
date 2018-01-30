@@ -1,3 +1,4 @@
+import enum
 import os
 import random
 import re
@@ -31,6 +32,17 @@ class SSTEmbeddingLoader(object):
                         if word not in id_dict and word not in unk_vocab_set:
                             unk_vocab_set.add(word)
         return (id_dict, np.array(weights), list(unk_vocab_set))
+
+class DatasetEnum(enum.Enum):
+    SST_FINE = 0
+    SST_BINARY = 1
+
+    @classmethod
+    def lookup(cls, name):
+        if name == "fine":
+            return cls.SST_FINE
+        elif name == "binary":
+            return cls.SST_BINARY
 
 class BinningSampler(data.sampler.Sampler):
     def __init__(self, items, mbatch_size=64, cuts=[0, 3, 5, 7, 9, 15, np.inf]):
