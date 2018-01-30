@@ -7,9 +7,9 @@ Used for several NLP tasks, microsem is designed to be extremely small-footprint
 2. Run `python microsem` to train a model (SST binary by default)
 
 ## Best Results
-| Task          | Best dev      | Best test  | # multiplies |
+| Task          | Best dev      | Test       | # multiplies |
 | ------------- |---------------|------------|--------------|
 | SST fine      | 43.7          | 40.6       | 80           |
-| SST binary    | 83.4          | 82.5       | 32           |
+| SST binary    | 83.8          | 83.4       | 32           |
 
 WIP
